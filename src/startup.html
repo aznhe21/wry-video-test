@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <script src="https://unpkg.com/cbor-web@8.1.0/dist/cbor.js"></script>
+    <script>
+      function recvCbor(req) {
+        return req.then(resp => resp.arrayBuffer()).then(ab => cbor.decodeFirst(ab));
+      }
+
+      window.addEventListener("DOMContentLoaded", () => {
+        const timestamp = document.getElementById("timestamp");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        let imageData;
+
+        async function requestFrame() {
+          try {
+            const frame = await recvCbor(fetch("/frames"));
+
+            if (!imageData) {
+              canvas.width = frame.width;
+              canvas.height = frame.height;
+              imageData = ctx.createImageData(frame.width, frame.height);
+              imageData.data.fill(255);
+            }
+            for (let c = 0, f = 0; c < imageData.data.length; c += 4, f += 3) {
+              imageData.data[c + 0] = frame.data[f + 0];
+              imageData.data[c + 1] = frame.data[f + 1];
+              imageData.data[c + 2] = frame.data[f + 2];
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+
+            const now = await recvCbor(fetch("/now"));
+            timestamp.textContent = `js: ${Date.now()}, recv latency: ${now - frame.send_timestamp}, frame latency: ${now - frame.timestamp}`;
+          } finally {
+            requestFrame();
+          }
+        }
+
+        requestFrame();
+      });
+    </script>
+    <style>
+      html { height: 100%; }
+      body { display: flex; flex-direction: column; height: 100%; margin: 0; }
+      #canvas { flex: 1; }
+    </style>
+  </head>
+  <body>
+    <div id="timestamp"></div>
+    <canvas id="canvas"></canvas>
+  </body>
+</html>
